@@ -12,24 +12,26 @@ def loadBatchFile(f, batch_catalog, batch_inv):
     return
 
 def mergeBatchFile(batch_order, batch_catalog, batch_inv):
-    merged_file = open(DIR_MERGE + INV_FILE + '_' + str(batch_order) + '.txt', 'wb')
     merged_catalog = {}
+    merged_file = open(DIR_MERGE + INV_FILE + '_' + str(batch_order) + '.txt', 'wb')
+
     for i, catalog in enumerate(batch_catalog):
         for term in catalog.keys():
-            merged_offset = merged_file.tell()
+            # term_dict: {'df': df, 'ttf': ttf, 'info':[[docid, tf, [pos]]]}
+            term_dict = {'df': 0, 'ttf': 0, 'info':[]}
             for j in xrange(i, len(batch_catalog)):
                 cat, inv_file = batch_catalog[j], batch_inv[j]
                 if term in cat:
                     offset, length = cat[term]['t'] # text information
-                    present_offset = offset
-                    while present_offset < offset + length:
-                        inv_file.seek(present_offset) # check
-                        info = inv_file.readline()
-                        present_offset = inv_file.tell()
-                        merged_file.write(info)
+                    inv_file.seek(offset) # check
+                    tf_line = inv_file.readline()
+                    term_id, doc_info = loadTFInfo(tf_line)
+                    term_dict['df'] += doc_info['df']
+                    term_dict['ttf'] += doc_info['ttf']
+                    term_dict['info'].append(doc_info['info'])
                     if j > i:
                         del cat[term]
-            merged_length = merged_file.tell() - 1 - merged_offset
+            merged_offset, merged_length = dumpTerm(term, term_dict, merged_file)
             merged_catalog[term] = {'t': [merged_offset, merged_length]}
         batch_inv[i].close()
     merged_file.close()

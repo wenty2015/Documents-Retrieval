@@ -28,13 +28,13 @@ def tokenizer(text):
 
 def loadTFInfo(tf_line):
     '''input: 'term_id.df.ttf.|doc_id tf pos,pos\n',
-    output: {term_id: {'df': df, 'ttf': ttf, 'info': [[doc_id, tf, [pos]]]}
+    output: term_id, {'df': df, 'ttf': ttf, 'info': [[doc_id, tf, [pos]]]}
     '''
     doc_info = {}
     slices = tf_line.rstrip('\n').split('.')
     term_id, doc_info['df'], doc_info['ttf'] = map(lambda x: int(x), slices[:3])
     docs = slices[-1].split('|')[1:]
-    docs = map(lambda x: loadDocInfo(x), docs)
+    doc_info['info'] = map(lambda x: loadDocInfo(x), docs)
     return term_id, doc_info
 
 def loadDocInfo(doc_line): # 'doc_id tf pos,pos'
@@ -45,23 +45,28 @@ def loadDocInfo(doc_line): # 'doc_id tf pos,pos'
     return doc
 
 def dumpFile(term_dict, cnt, dir_file):
-    # term_dict: {term: {'df': df, 'ttf': ttf, 'info':[[docid, tf, [pos]]]}
+    # term_dict: {term: {'df': df, 'ttf': ttf, 'info':[[docid, tf, [pos]]]}}
     f_inv = open(dir_file + 'INV_'+str(cnt)+'.txt', 'wb')
     catalog = {}
     for term, term_info in term_dict.iteritems():
-        offset = f_inv.tell()
-        sorted_info = sorted(term_info['info'], key = lambda x: -x[1]) # ordered by tf desc
-        df_info_text = str(term) + '.' + str(term_info['df']) + '.' + \
-                            str(term_info['ttf']) + '.'
-        f_inv.write(df_info_text)
-        for doc_info in sorted_info:
-            text = '|' + ' '.join([str(doc_info[0]), str(doc_info[1]),
-                                    ','.join(map(lambda x: str(x), doc_info[2]))])
-            f_inv.write(text)
-        f_inv.write('\n')
-        length = f_inv.tell() - offset
+        offset, length = dumpTerm(term, term_info, f_inv)
         catalog[term] = {'t': [offset, length]}
     f_inv.close()
     with open(dir_file + 'CATALOG_'+str(cnt), 'wb') as f_cat:
         cPickle.dump(catalog, f_cat)
     return
+
+def dumpTerm(term, term_info, f_inv):
+    # term_info: {'df': df, 'ttf': ttf, 'info':[[docid, tf, [pos]]]}
+    offset = f_inv.tell()
+    sorted_info = sorted(term_info['info'], key = lambda x: -x[1]) # ordered by tf desc
+    df_info_text = str(term) + '.' + str(term_info['df']) + '.' + \
+                        str(term_info['ttf']) + '.'
+    f_inv.write(df_info_text)
+    for doc_info in sorted_info:
+        text = '|' + ' '.join([str(doc_info[0]), str(doc_info[1]),
+                                ','.join(map(lambda x: str(x), doc_info[2]))])
+        f_inv.write(text)
+    f_inv.write('\n')
+    length = f_inv.tell() - offset
+    return offset, length

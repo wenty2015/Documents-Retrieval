@@ -1,6 +1,8 @@
 import os
 import cPickle
+import sys
 from datetime import datetime
+from func import *
 
 def loadBatchFile(f, batch_catalog, batch_inv):
     index_no = f.split('_')[1]
@@ -31,12 +33,20 @@ def mergeBatchFile(batch_order, batch_catalog, batch_inv):
             merged_catalog[term] = {'t': [merged_offset, merged_length]}
         batch_inv[i].close()
     merged_file.close()
+    print 'V', len(merged_catalog.keys())
     with open(DIR_MERGE + CAT_FILE + '_' + str(batch_order), 'wb') as f:
         cPickle.dump(merged_catalog, f)
     return
 
-DIR = '../data/indexing_files/'
-DIR_MERGE = '../data/merged_indexing_files/'
+args = sys.argv
+if len(args) == 1:
+    stem_method = 'no_stop_words'
+else:
+    stem_method = args[1]
+
+DIR_DATA = '../data/' + stem_method + '/'
+DIR = DIR_DATA + 'indexing_files/'
+DIR_MERGE = DIR_DATA + 'merged_indexing_files/'
 CAT_FILE = 'CATALOG'
 INV_FILE = 'INV'
 BATCH = 100

@@ -1,9 +1,9 @@
 import os
 import cPickle
-from nltk.tokenize import TreebankWordTokenizer
 from datetime import datetime
 import sys
-from stemming.porter2 import stem
+from func import *
+from numpy import mean
 
 def updateTerm(text, docno, term_dict, termid_dict, term_map, doc_map, stem_method,
                 vocabulary, documents):
@@ -14,44 +14,33 @@ def updateTerm(text, docno, term_dict, termid_dict, term_map, doc_map, stem_meth
         doc_id = documents
         doc_length = sum(map(lambda x: len(x[1]), terms.items()))
         doc_map[documents] = [docno, doc_length]
-        # update term_map
+        # update term_map and term_dict
         for term, pos in terms.iteritems():
-            if term not in termid_dict: # update term_map, {term_id: [term, df, ttf]}
+            if term not in termid_dict: # update term_map, {term_id: term}
                 vocabulary += 1
                 termid_dict[term] = vocabulary
                 term_id = vocabulary
-                term_map[term_id] = [term, 1, len(pos)] # [term, df, ttf]
+                term_map[term_id] = term
             else:
                 term_id = termid_dict[term]
-                term_map[term_id][1] += 1 # df
-                term_map[term_id][2] += len(pos) # ttf
 
             if term_id not in term_dict: # update term_dict
-                term_dict[term_id] = [[doc_id, len(pos), pos]] # [docid, tf, [pos]]
+                term_dict[term_id] = {'df': 1, 'ttf': len(pos),
+                                    'info': [[doc_id, len(pos), pos]]}
             else:
-                term_dict[term_id].append([doc_id, len(pos), pos])
+                term_dict[term_id]['df'] += 1
+                term_dict[term_id]['ttf'] += len(pos)
+                term_dict[term_id]['info'].append([doc_id, len(pos), pos])
     return vocabulary, documents
 
-def stemWord(w, stem_method): # to do
-    w = stemAsIs(w)
-    if stem_method in ['no_stop_words', 'stemmed_no_stop_words']:
-        if w in stop_words:
-            w = ''
-    if stem_method in ['stemmed', 'stemmed_no_stop_words']:
-        w = stem(w)
-    return w
-
-def stemAsIs(w):
-    return w.rstrip('=.-:\\').replace(',','').lower()
-
 def tokenizeText(text, stem_method):
-    tokens = TreebankWordTokenizer().tokenize(text)
+    tokens = tokenizer(text)
     terms = {}
     position = 0
     for w in tokens:
         if not w[0].isalnum(): # remove the non-words
             continue
-        w_stemmed = stemWord(w, stem_method)
+        w_stemmed = stemWord(w, stem_method, STOP_WORDS)
         if w_stemmed == '':
             continue
         if w_stemmed not in terms:
@@ -60,24 +49,6 @@ def tokenizeText(text, stem_method):
             terms[w_stemmed].append(position)
         position += 1
     return terms
-
-def dumpFile(term_dict, cnt): # term_dict: {term: [[docid, tf, [pos]]]}
-    f_inv = open(DIR_DATA + 'indexing_files/INV_'+str(cnt)+'.txt', 'wb')
-    catalog = {}
-    for term, term_info in term_dict.iteritems():
-        offset = f_inv.tell()
-        sorted_info = sorted(term_info, key = lambda x: -x[1]) # ordered by tf desc
-        for doc_info in sorted_info:
-            text = '|' + ' '.join([str(doc_info[0]), str(doc_info[1]),
-                                    ','.join(map(lambda x: str(x), doc_info[2]))])
-            f_inv.write(text)
-        f_inv.write('\n')
-        length = f_inv.tell() - offset
-        catalog[term] = {'t': [offset, length]}
-    f_inv.close()
-    with open(DIR_DATA + 'indexing_files/CATALOG_'+str(cnt), 'wb') as f_cat:
-        cPickle.dump(catalog, f_cat)
-    return
 
 DIR = '../AP_DATA/ap89_collection/'
 file_list = os.listdir(DIR)
@@ -94,20 +65,14 @@ vocabulary, documents, ttf = 0, 0, 0
 
 args = sys.argv
 if len(args) == 1:
-    stem_method = 'as_is'
+    stem_method = 'no_stop_words'
 else:
-    stem_method = args[1:]
+    stem_method = args[1]
 DIR_DATA = '../data/' + stem_method + '/'
-
-def loadStopWords():
-    stop_words = set()
-    with open('stoplist.txt', 'rb') as f:
-        for line in f:
-            stop_words.add(line.replace('\n', ''))
-    return stop_words
-
+DIR_FILE = 'indexing_files/'
+STOP_WORDS = None
 if stem_method in ['no_stop_words', 'stemmed_no_stop_words']:
-    stop_words = loadStopWords()
+    STOP_WORDS = loadStopWords()
 
 now = datetime.now()
 for file_name in file_list:
@@ -118,7 +83,7 @@ for file_name in file_list:
             line = l.replace('\n','')
             if line[:len(TAG_DOC)] == TAG_DOC:
                 if batch_cnt == BATCH:
-                    dumpFile(term_dict, cnt) # dump file for a doc batch
+                    dumpFile(term_dict, cnt, DIR_DATA + DIR_FILE) # dump file for a doc batch
                     batch_cnt = 0
                     term_dict = {}
                 elif batch_cnt > 0:
@@ -145,16 +110,17 @@ for file_name in file_list:
 if batch_cnt > 0:
     vocabulary, documents = updateTerm(text, docno, term_dict, term_id,
                     term_map, doc_map, stem_method, vocabulary, documents)
-    dumpFile(term_dict, cnt)
+    dumpFile(term_dict, cnt, DIR_DATA + DIR_FILE)
 print 'total number of documents loaded is', cnt
 print 'running time is ', datetime.now() - now
 
 ttf = sum(map(lambda x: x[1][1], doc_map.items())) # {doc_id: [docno, doc length]}
+print 'V', vocabulary, 'D', documents, 'TTF', ttf, \
+        'DL', mean(map(lambda x: x[1][1], doc_map.items()))
 stats = {'V': vocabulary, 'D': documents, 'TTF': ttf}
 print 'writing STATS and MAP files'
 now = datetime.now()
-with open(DIR_DATA + 'term_dict', 'wb') as f:
-    cPickle.dump(term_dict, f)
+
 with open(DIR_DATA + 'TERM_ID', 'wb') as f:
     cPickle.dump(term_id, f)
 with open(DIR_DATA + 'STATS', 'wb') as f:

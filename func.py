@@ -20,11 +20,12 @@ def stemWord(w, stem_method, stop_words = None):
 
 def stemAsIs(w):
     w = w.strip('=.-:\\').replace(',','').lower()
-    w = w.rstrip('\'s')
+    # w = w.rstrip('\'s')
     return w
 
 def tokenizer(text):
-    return re.findall(r"[a-zA-Z](?:[a-zA-Z'/-])+|\w+(?:['.,]?\w+)*",text)
+    # r"[a-zA-Z](?:[a-zA-Z'/-])+|\w+(?:['.,]?\w+)*"
+    return re.findall(r"\w+(?:\.?\w+)*",text)
 
 def loadTFInfo(tf_line):
     '''input: 'term_id.df.ttf.|doc_id tf pos,pos\n',
@@ -44,18 +45,6 @@ def loadDocInfo(doc_line): # 'doc_id tf pos,pos'
     doc.append(pos)
     return doc
 
-def dumpFile(term_dict, cnt, dir_file):
-    # term_dict: {term: {'df': df, 'ttf': ttf, 'info':[[docid, tf, [pos]]]}}
-    f_inv = open(dir_file + 'INV_'+str(cnt)+'.txt', 'wb')
-    catalog = {}
-    for term, term_info in term_dict.iteritems():
-        offset, length = dumpTerm(term, term_info, f_inv)
-        catalog[term] = {'t': [offset, length]}
-    f_inv.close()
-    with open(dir_file + 'CATALOG_'+str(cnt), 'wb') as f_cat:
-        cPickle.dump(catalog, f_cat)
-    return
-
 def dumpTerm(term, term_info, f_inv):
     # term_info: {'df': df, 'ttf': ttf, 'info':[[docid, tf, [pos]]]}
     offset = f_inv.tell()
@@ -70,3 +59,23 @@ def dumpTerm(term, term_info, f_inv):
     f_inv.write('\n')
     length = f_inv.tell() - offset
     return offset, length
+
+def dumpDict(file_dir, file_name, d, list_flag = True):
+    f = open(file_dir + file_name + '.txt', 'wb')
+    for key, value in d.iteritems():
+        line_list = [key] + value if list_flag else [key, value]
+        line = ' '.join(map(lambda t: str(t), line_list)) + '\n'
+        f.write(line)
+    f.close()
+    return
+
+def loadDict(file_dir, file_name, int_loc_list = []):
+    f = open(file_dir + file_name + '.txt', 'rb')
+    d =  {}
+    for line in f:
+        line_list = line.rstrip('\n').split(' ')
+        for loc in int_loc_list:
+            line_list[loc] = int(line_list[loc])
+        d[line_list[0]] = line_list[1:] if len(line_list[1:]) > 1 else line_list[1]
+    f.close()
+    return d

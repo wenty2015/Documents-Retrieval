@@ -1,5 +1,4 @@
 import os
-import cPickle
 from datetime import datetime
 import sys
 from func import *
@@ -49,6 +48,17 @@ def tokenizeText(text, stem_method):
             terms[w_stemmed].append(position)
         position += 1
     return terms
+
+def dumpFile(term_dict, cnt, dir_file):
+    # term_dict: {term: {'df': df, 'ttf': ttf, 'info':[[docid, tf, [pos]]]}}
+    f_inv = open(dir_file + 'INV_'+str(cnt)+'.txt', 'wb')
+    catalog = {}
+    for term, term_info in term_dict.iteritems():
+        offset, length = dumpTerm(term, term_info, f_inv)
+        catalog[term] = [offset, length]
+    f_inv.close()
+    dumpDict(dir_file, 'CATALOG_'+ str(cnt), catalog)
+    return
 
 DIR = '../AP_DATA/ap89_collection/'
 file_list = os.listdir(DIR)
@@ -121,12 +131,7 @@ stats = {'V': vocabulary, 'D': documents, 'TTF': ttf}
 print 'writing STATS and MAP files'
 now = datetime.now()
 
-with open(DIR_DATA + 'TERM_ID', 'wb') as f:
-    cPickle.dump(term_id, f)
-with open(DIR_DATA + 'STATS', 'wb') as f:
-    cPickle.dump(stats, f)
-with open(DIR_DATA + 'TERM_MAP', 'wb') as f:
-    cPickle.dump(term_map, f)
-with open(DIR_DATA + 'DOC_MAP', 'wb') as f:
-    cPickle.dump(doc_map, f)
+dumpDict(DIR_DATA, 'STATS', stats, list_flag = False)
+dumpDict(DIR_DATA, 'TERM_MAP', term_map, list_flag = False)
+dumpDict(DIR_DATA, 'DOC_MAP', doc_map)
 print 'running time is ', datetime.now() - now

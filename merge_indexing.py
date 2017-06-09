@@ -1,13 +1,11 @@
 import os
-import cPickle
 import sys
 from datetime import datetime
 from func import *
 
 def loadBatchFile(f, batch_catalog, batch_inv):
     index_no = f.split('_')[1]
-    with open(DIR + f, 'rb') as f:
-        batch_catalog.append(cPickle.load(f))
+    batch_catalog.append(loadDict(DIR, f, [0, 1, 2]))
     batch_inv.append(open(DIR + INV_FILE + '_' + index_no + '.txt', 'rb'))
     return
 
@@ -22,22 +20,21 @@ def mergeBatchFile(batch_order, batch_catalog, batch_inv):
             for j in xrange(i, len(batch_catalog)):
                 cat, inv_file = batch_catalog[j], batch_inv[j]
                 if term in cat:
-                    offset, length = cat[term]['t'] # text information
+                    offset, length = cat[term]
                     inv_file.seek(offset) # check
                     tf_line = inv_file.readline()
                     term_id, doc_info = loadTFInfo(tf_line)
                     term_dict['df'] += doc_info['df']
                     term_dict['ttf'] += doc_info['ttf']
-                    term_dict['info'].append(doc_info['info'])
+                    term_dict['info'].extend(doc_info['info'])
                     if j > i:
                         del cat[term]
             merged_offset, merged_length = dumpTerm(term, term_dict, merged_file)
-            merged_catalog[term] = {'t': [merged_offset, merged_length]}
+            merged_catalog[term] = [merged_offset, merged_length]
         batch_inv[i].close()
     merged_file.close()
     print 'V', len(merged_catalog.keys())
-    with open(DIR_MERGE + CAT_FILE + '_' + str(batch_order), 'wb') as f:
-        cPickle.dump(merged_catalog, f)
+    dumpDict(DIR_MERGE, CAT_FILE + '_' + str(batch_order), merged_catalog)
     return
 
 args = sys.argv
@@ -52,7 +49,8 @@ DIR_MERGE = DIR_DATA + 'merged_indexing_files/'
 CAT_FILE = 'CATALOG'
 INV_FILE = 'INV'
 BATCH = 100
-file_list = sorted(filter(lambda f: f[:len(CAT_FILE)] == CAT_FILE, os.listdir(DIR)),
+file_list = filter(lambda f: f[:len(CAT_FILE)] == CAT_FILE, os.listdir(DIR))
+file_list = sorted(map(lambda f: f.rstrip('.txt'), file_list),
                     key = lambda x: int(x.split('_')[1]))
 print len(file_list), 'files to load'
 

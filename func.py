@@ -1,7 +1,8 @@
 from stemming.porter2 import stem
 import re
-import cPickle
-
+'''from nltk.stem.porter import *
+STEMMER = PorterStemmer()
+'''
 def loadStopWords():
     stop_words = set()
     with open('stoplist.txt', 'rb') as f:
@@ -16,12 +17,12 @@ def stemWord(w, stem_method, stop_words = None):
             return ''
     if stem_method in ['stemmed', 'stemmed_no_stop_words']:
         w = stem(w)
+        # w = STEMMER.stem(w)
     return w
 
 def stemAsIs(w):
-    w = w.strip('=.-:\\').replace(',','').lower()
-    # w = w.rstrip('\'s')
-    return w
+    # w = w.strip('=.-:\\').replace(',','').lower()
+    return w.lower()
 
 def tokenizer(text):
     # r"[a-zA-Z](?:[a-zA-Z'/-])+|\w+(?:['.,]?\w+)*"

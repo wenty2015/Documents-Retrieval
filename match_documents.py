@@ -1,5 +1,4 @@
 import os
-import cPickle
 import numpy as np
 from datetime import datetime
 import sys
@@ -8,15 +7,14 @@ from func import *
 def loadFiles(file_list, catalog_list, inv_list):
     for f in file_list:
         index_no = f.split('_')[1]
-        with open(DIR_MERGE + f, 'rb') as f:
-            catalog_list.append(cPickle.load(f))
+        catalog_list.append(loadDict(DIR_MERGE, f, [0,1,2]))
         inv_list.append(open(DIR_MERGE + INV_FILE + '_' + index_no + '.txt', 'rb'))
     return
 
 def matchScore(term, matching_scores, query_tf):
     for cat, inv_file in zip(catalog_list, inv_list):
         if term in cat:
-            offset, length = cat[term]['t']
+            offset, length = cat[term]
             inv_file.seek(offset)
             tf_line = inv_file.readline()
             # term_id, {'df': df, 'ttf': ttf, 'info': [[doc_id, tf, [pos]]]}
@@ -104,7 +102,7 @@ def unigramJM(term, matching_scores, tf_info, lamb = .5):
 def readQuery(line, queries, stemmed_method):
     query_no = line[0]
     queries[query_no] = {}
-    for w in line:
+    for w in line[1:]:
         w = stemWord(w, stemmed_method, STOP_WORDS)
         if w == '' or w not in TERM_ID:
             continue
@@ -130,7 +128,7 @@ def getJMMinScore(query_terms):
     for term in query_terms:
         for cat, inv_file in zip(catalog_list, inv_list):
             if term in cat:
-                offset, length = cat[term]['t']
+                offset, length = cat[term]
                 inv_file.seek(offset)
                 tf_line = inv_file.readline()
                 # term_id, {'df': df, 'ttf': ttf, 'info': [[doc_id, tf, [pos]]]}
@@ -142,21 +140,19 @@ def getJMMinScore(query_terms):
 
 args = sys.argv
 if len(args) == 1:
-    stemmed_method = 'as_is'
+    stemmed_method = 'no_stop_words'
 else:
     stemmed_method = args[1]
 
 DIR_DATA = '../data/' + stemmed_method + '/'
 DIR_MERGE = DIR_DATA + 'merged_indexing_files/'
 
-with open(DIR_DATA + 'STATS', 'rb') as f:
-    STATS = cPickle.load(f)
-with open(DIR_DATA + 'TERM_MAP', 'rb') as f:
-    TERM_MAP = cPickle.load(f)
-with open(DIR_DATA + 'DOC_MAP', 'rb') as f:
-    DOC_MAP = cPickle.load(f)
-with open(DIR_DATA + 'TERM_ID', 'rb') as f:
-    TERM_ID = cPickle.load(f)
+STATS = loadDict(DIR_DATA, 'STATS', [1])
+TERM_MAP = loadDict(DIR_DATA, 'TERM_MAP', [0])
+DOC_MAP = loadDict(DIR_DATA, 'DOC_MAP', [0,2])
+TERM_ID = {}
+for term_id, term in TERM_MAP.iteritems():
+    TERM_ID[term] = term_id
 
 QUERY_FILE = '../AP_DATA/query_desc.51-100.short_cut.txt'
 STOP_WORDS = None
@@ -179,8 +175,9 @@ print 'total number of queries loaded is', cnt
 
 CAT_FILE = 'CATALOG'
 INV_FILE = 'INV'
-file_list = sorted(filter(lambda f: f[:len(CAT_FILE)] == CAT_FILE,
-                            os.listdir(DIR_MERGE)),
+file_list = filter(lambda f: f[:len(CAT_FILE)] == CAT_FILE,
+                            os.listdir(DIR_MERGE))
+file_list = sorted(map(lambda f: f.rstrip('.txt'), file_list),
                     key = lambda x: int(x.split('_')[1]))
 print len(file_list), 'files to load'
 catalog_list, inv_list = [], []
@@ -200,7 +197,7 @@ for query_no, query_tf in queries.iteritems(): # {query_no:{terms:tf}}
     print 'match documents for query', query_no
     print map(lambda x: TERM_MAP[x], query_terms)
     for term in query_terms:
-        print 'match term', term, TERM_MAP[term]
+        # print 'match term', term, TERM_MAP[term]
         matchScore(term, matching_scores, query_tf)
     print 'calculate score and rank'
     print len(matching_scores['tfidf'].keys()), 'documents match'

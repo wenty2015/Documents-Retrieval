@@ -84,6 +84,7 @@ STOP_WORDS = None
 if stem_method in ['no_stop_words', 'stemmed_no_stop_words']:
     STOP_WORDS = loadStopWords()
 
+text = ''
 now = datetime.now()
 for file_name in file_list:
     if file_name[:2].lower() != 'ap':
@@ -92,19 +93,19 @@ for file_name in file_list:
         for l in f:
             line = l.replace('\n','')
             if line[:len(TAG_DOC)] == TAG_DOC:
+                if len(text) > 0:
+                    vocabulary, documents = updateTerm(text, docno,
+                        term_dict, term_id,
+                        term_map, doc_map, stem_method, vocabulary, documents)
+                    cnt, batch_cnt = cnt + 1, batch_cnt + 1
                 if batch_cnt == BATCH:
                     dumpFile(term_dict, cnt, DIR_DATA + DIR_FILE) # dump file for a doc batch
                     batch_cnt = 0
                     term_dict = {}
-                elif batch_cnt > 0:
-                    vocabulary, documents = updateTerm(text, docno,
-                        term_dict, term_id,
-                        term_map, doc_map, stem_method, vocabulary, documents)
                 read_text = False
                 text = ''
 
-                cnt, batch_cnt = cnt + 1, batch_cnt + 1
-                if cnt % 5000 == 0:
+                if cnt > 0 and cnt % 5000 == 0:
                     print 'loaded ', cnt, ' documents'
             elif line[:len(TAG_DOCNO_START)] == TAG_DOCNO_START:
                 docno = line.lstrip(TAG_DOCNO_START).rstrip(TAG_DOCNO_END).strip(' ')
@@ -117,10 +118,12 @@ for file_name in file_list:
             else:
                 if read_text:
                     text += l
-if batch_cnt > 0:
+if len(text) > 0:
     vocabulary, documents = updateTerm(text, docno, term_dict, term_id,
-                    term_map, doc_map, stem_method, vocabulary, documents)
+                            term_map, doc_map, stem_method, vocabulary, documents)
+if len(term_dict.keys()) > 0:
     dumpFile(term_dict, cnt, DIR_DATA + DIR_FILE)
+
 print 'total number of documents loaded is', cnt
 print 'running time is ', datetime.now() - now
 

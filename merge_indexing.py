@@ -17,6 +17,7 @@ def mergeBatchFile(batch_order, batch_catalog, batch_inv):
         for term in catalog.keys():
             # term_dict: {'df': df, 'ttf': ttf, 'info':[[docid, tf, [pos]]]}
             term_dict = {'df': 0, 'ttf': 0, 'info':[]}
+            doc_blocks = []
             for j in xrange(i, len(batch_catalog)):
                 cat, inv_file = batch_catalog[j], batch_inv[j]
                 if term in cat:
@@ -26,9 +27,10 @@ def mergeBatchFile(batch_order, batch_catalog, batch_inv):
                     term_id, doc_info = loadTFInfo(tf_line)
                     term_dict['df'] += doc_info['df']
                     term_dict['ttf'] += doc_info['ttf']
-                    term_dict['info'].extend(doc_info['info'])
+                    doc_blocks.append(doc_info['info'])
                     if j > i:
                         del cat[term]
+            term_dict['info'] = mergeSort(doc_blocks)
             merged_offset, merged_length = dumpTerm(term, term_dict, merged_file)
             merged_catalog[term] = [merged_offset, merged_length]
         batch_inv[i].close()
@@ -36,6 +38,22 @@ def mergeBatchFile(batch_order, batch_catalog, batch_inv):
     print 'V', len(merged_catalog.keys())
     dumpDict(DIR_MERGE, CAT_FILE + '_' + str(batch_order), merged_catalog)
     return
+
+def mergeSort(sorted_lists):
+    # sorted_lists: [ [ [doc_id, tf, [pos]], ], ]
+    total_num = sum(map(lambda l: len(l), sorted_lists))
+    merged_list = [ [] for i in xrange(total_num) ]
+    pointer_list = [0] * len(sorted_lists)
+    for loc in xrange(total_num):
+        max_cnt = 0
+        for i, p in enumerate(pointer_list):
+            if p < len(sorted_lists[i]):
+                if sorted_lists[i][p][1] > max_cnt:
+                    max_index = i
+                    max_cnt = sorted_lists[i][p][1]
+        merged_list[loc] = sorted_lists[max_index][pointer_list[max_index]]
+        pointer_list[max_index] += 1
+    return merged_list
 
 args = sys.argv
 if len(args) == 1:

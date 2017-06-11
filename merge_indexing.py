@@ -9,14 +9,30 @@ def loadBatchFile(f, batch_catalog, batch_inv):
     batch_inv.append(open(DIR + INV_FILE + '_' + index_no + '.txt', 'rb'))
     return
 
+def dumpTermWithLoc(term, term_info, doc_blocks, f_inv):
+    # term_info: {'df': df, 'ttf': ttf, 'loc':[[batch_loc, loc]]}
+    offset = f_inv.tell()
+    df_info_text = str(term) + '.' + str(term_info['df']) + '.' + \
+                        str(term_info['ttf']) + '.'
+    f_inv.write(df_info_text)
+    for loc_info in term_info['loc']:
+        idx, loc = loc_info
+        doc_info = doc_blocks[idx][loc]
+        text = '|' + ' '.join([str(doc_info[0]), str(doc_info[1]),
+                                ','.join(map(lambda x: str(x), doc_info[2]))])
+        f_inv.write(text)
+    f_inv.write('\n')
+    length = f_inv.tell() - offset
+    return offset, length
+
 def mergeBatchFile(batch_order, batch_catalog, batch_inv):
     merged_catalog = {}
     merged_file = open(DIR_MERGE + INV_FILE + '_' + str(batch_order) + '.txt', 'wb')
 
     for i, catalog in enumerate(batch_catalog):
         for term in catalog.keys():
-            # term_dict: {'df': df, 'ttf': ttf, 'info':[[docid, tf, [pos]]]}
-            term_dict = {'df': 0, 'ttf': 0, 'info':[]}
+            # term_dict: {'df': df, 'ttf': ttf, 'loc':[[batch_loc, loc]]}
+            term_dict = {'df': 0, 'ttf': 0, 'loc':[]}
             doc_blocks = []
             for j in xrange(i, len(batch_catalog)):
                 cat, inv_file = batch_catalog[j], batch_inv[j]
@@ -30,8 +46,9 @@ def mergeBatchFile(batch_order, batch_catalog, batch_inv):
                     doc_blocks.append(doc_info['info'])
                     if j > i:
                         del cat[term]
-            term_dict['info'] = mergeSort(doc_blocks)
-            merged_offset, merged_length = dumpTerm(term, term_dict, merged_file)
+            term_dict['loc'] = mergeSort(doc_blocks) #[[batch_loc, loc]]
+            merged_offset, merged_length = dumpTermWithLoc(
+                        term, term_dict, doc_blocks, merged_file)
             merged_catalog[term] = [merged_offset, merged_length]
         batch_inv[i].close()
     merged_file.close()
@@ -51,7 +68,7 @@ def mergeSort(sorted_lists):
                 if sorted_lists[i][p][1] > max_cnt:
                     max_index = i
                     max_cnt = sorted_lists[i][p][1]
-        merged_list[loc] = sorted_lists[max_index][pointer_list[max_index]]
+        merged_list[loc] = (max_index, pointer_list[max_index])
         pointer_list[max_index] += 1
     return merged_list
 

@@ -20,7 +20,13 @@ def matchScore(term, matching_scores, query_tf):
             # term_id, {'df': df, 'ttf': ttf, 'info': [[doc_id, tf, [pos]]]}
             term_id, tf_info = loadTFInfo(tf_line)
             calculateScore(term, matching_scores, tf_info, query_tf)
-    return
+        return getPosInfo(tf_info)
+
+def getPosInfo(tf_info):
+    pos_info = {}
+    for doc_id, tf, pos in tf_info['info']:
+        pos_info[doc_id] = pos
+    return pos_info
 
 def calculateScore(term, matching_scores, tf_info, query_tf):
     tf_idf(term, matching_scores, tf_info)
@@ -99,6 +105,44 @@ def unigramJM(term, matching_scores, tf_info, lamb = .5):
             matching_scores[method][doc_id] = {term: score}
     return
 
+def calculateMinDist(query_terms, pos_info):
+    # pos_info: {term: {doc_id: [pos]}}
+    # output: minDist: {doc_id: mindist}
+    minDist = {}
+    for i, term1 in enumerate(query_terms):
+        for term2 in query_terms[i+1:]:
+            doc_set = set(pos_info[term1].keys()) & set(pos_info[term2].keys())
+            if len(doc_set) > 0:
+                for doc in doc_set:
+                    dist = calculateMinDist2Terms(pos_info[term1][doc],
+                                                    pos_info[term2][doc])
+                    if doc in minDist:
+                        minDist[doc] = min(minDist[doc], dist)
+                    else:
+                        minDist[doc] = dist
+    return minDist
+
+def calculateMinDist2Terms(pos1, pos2):
+    p1, p2 = 0, 0
+    min_dist = sys.maxint
+    while p1 < len(pos1) and p2 < len(pos2):
+        if pos1[p1] < pos2[p2]:
+            min_dist = min(min_dist, pos2[p2] - pos1[p1] + 1)
+            p1 += 1
+        else:
+            min_dist = min(min_dist, pos1[p1] - pos2[p2] + 1)
+            p2 += 1
+    return min_dist
+
+def calculateProximityScore(scores, minDist, alpha = .2):
+    for i, score in enumerate(scores):
+        if score[0] in minDist:
+            adjustment_factor = np.log(alpha + np.exp(-minDist[score[0]]))
+        else:
+            adjustment_factor = MIN_ADJUSTMENT_FACTOR
+        score[1] += adjustment_factor
+    return scores
+
 def readQuery(line, queries, stemmed_method):
     query_no = line[0]
     queries[query_no] = {}
@@ -156,6 +200,9 @@ for term_id, term in TERM_MAP.iteritems():
 
 QUERY_FILE = '../AP_DATA/query_desc.51-100.short_cut.txt'
 STOP_WORDS = None
+ALPHA = .1
+MIN_ADJUSTMENT_FACTOR = np.log(ALPHA + np.exp(- sys.maxint ))
+
 if stemmed_method in ['no_stop_words', 'stemmed_no_stop_words']:
     STOP_WORDS = loadStopWords()
 
@@ -186,19 +233,33 @@ loadFiles(file_list, catalog_list, inv_list)
 print 'match documents'
 topK = 1000
 result_files = {}
-for matching_method in ['tfidf', 'okapi_bm25', 'unigramJM']:
+method_list = ['tfidf', 'okapi_bm25', 'unigramJM', 'proximity']
+for matching_method in method_list:
     result_files[matching_method] = open(DIR_DATA + matching_method + '.txt', 'wb')
 
 for query_no, query_tf in queries.iteritems(): # {query_no:{terms:tf}}
+    '''if int(query_no) != 100:
+        continue'''
     query_terms = query_tf.keys()
     # matching_scores: {doc_id: {term:score}}
-    matching_scores = {'tfidf':{}, 'okapi_bm25':{}, 'unigramJM':{}}
+    matching_scores = {method: {} for method in method_list}
     now = datetime.now()
     print 'match documents for query', query_no
     print map(lambda x: TERM_MAP[x], query_terms)
+
+    pos_info = {}
     for term in query_terms:
         # print 'match term', term, TERM_MAP[term]
-        matchScore(term, matching_scores, query_tf)
+        pos_info[term] = matchScore(term, matching_scores, query_tf)
+    print 'calculate minimum pair distance'
+    # minDist: {doc_id: mindist}
+    minDist = calculateMinDist(query_terms, pos_info)
+
+    '''dumpDict('', 'query_tf', query_tf, False)
+    for pos_term in pos_info.keys():
+        dumpDict('', 'pos_info_' + str(pos_term), pos_info[pos_term])
+    dumpDict('', 'minDist', minDist, False)'''
+
     print 'calculate score and rank'
     print len(matching_scores['tfidf'].keys()), 'documents match'
 
@@ -208,6 +269,11 @@ for query_no, query_tf in queries.iteritems(): # {query_no:{terms:tf}}
             scores = map(lambda score: aggScore(score, matching_method,
                                                 query_terms, jm_score),
                         matching_scores[matching_method].items())
+        elif matching_method == 'proximity':
+            retrieval_model = 'tfidf'
+            scores = map(lambda score: aggScore(score, retrieval_model),
+                        matching_scores[retrieval_model].items())
+            scores = calculateProximityScore(scores, minDist, ALPHA)
         else:
             scores = map(lambda score: aggScore(score, matching_method),
                         matching_scores[matching_method].items())

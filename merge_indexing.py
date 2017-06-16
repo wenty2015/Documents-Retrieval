@@ -13,7 +13,7 @@ def dumpTermWithLoc(term, term_info, doc_blocks, f_inv):
     # term_info: {'df': df, 'ttf': ttf, 'loc':[[batch_loc, loc]]}
     offset = f_inv.tell()
     df_info_text = str(term) + '.' + str(term_info['df']) + '.' + \
-                        str(term_info['ttf']) + '.'
+                        str(term_info['ttf'])
     f_inv.write(df_info_text)
     for loc_info in term_info['loc']:
         idx, loc = loc_info
@@ -39,7 +39,7 @@ def mergeBatchFile(batch_order, batch_catalog, batch_inv):
                 if term in cat:
                     offset, length = cat[term]
                     inv_file.seek(offset) # check
-                    tf_line = inv_file.readline()
+                    tf_line = inv_file.read(length)
                     term_id, doc_info = loadTFInfo(tf_line)
                     term_dict['df'] += doc_info['df']
                     term_dict['ttf'] += doc_info['ttf']

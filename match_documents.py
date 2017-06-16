@@ -16,7 +16,7 @@ def matchScore(term, matching_scores, query_tf):
         if term in cat:
             offset, length = cat[term]
             inv_file.seek(offset)
-            tf_line = inv_file.readline()
+            tf_line = inv_file.read(length)
             # term_id, {'df': df, 'ttf': ttf, 'info': [[doc_id, tf, [pos]]]}
             term_id, tf_info = loadTFInfo(tf_line)
             calculateScore(term, matching_scores, tf_info, query_tf)
@@ -174,7 +174,7 @@ def getJMMinScore(query_terms):
             if term in cat:
                 offset, length = cat[term]
                 inv_file.seek(offset)
-                tf_line = inv_file.readline()
+                tf_line = inv_file.read(length)
                 # term_id, {'df': df, 'ttf': ttf, 'info': [[doc_id, tf, [pos]]]}
                 term_id, tf_info = loadTFInfo(tf_line)
         w_cf = tf_info['ttf']
@@ -215,6 +215,8 @@ with open(QUERY_FILE) as f:
                     .replace('(', '').replace(')', '').split(' ')
         line = filter(lambda x: len(x) == 1 and x[0].isalnum() or
                                 len(x) > 1 and x[1].isalnum(), line)
+        line = tokenizer(l)
+        #print line
         if len(line) > 1 and line[0].isdigit():
             cnt += 1
             readQuery(line, queries, stemmed_method)

@@ -3,15 +3,10 @@ import re
 '''from nltk.stem.porter import *
 STEMMER = PorterStemmer()
 '''
-def loadStopWords():
-    stop_words = set()
-    with open('stoplist.txt', 'rb') as f:
-        for line in f:
-            stop_words.add(line.replace('\n', ''))
-    return stop_words
-
 def stemWord(w, stem_method, stop_words = None):
     w = stemAsIs(w)
+    '''if len(w) == 1 and w.isalpha():
+        return '''''
     if stem_method in ['no_stop_words', 'stemmed_no_stop_words']:
         if w in stop_words:
             return ''
@@ -20,22 +15,31 @@ def stemWord(w, stem_method, stop_words = None):
         # w = STEMMER.stem(w)
     return w
 
+def loadStopWords():
+    stop_words = set()
+    with open('stoplist.txt', 'rb') as f:
+        for line in f:
+            stop_words.add(line.replace('\n', ''))
+    return stop_words
+
 def stemAsIs(w):
-    # w = w.strip('=.-:\\').replace(',','').lower()
-    return w.lower()
+    w = w.lower().replace(',','').rstrip('_')
+    return w
 
 def tokenizer(text):
     # r"[a-zA-Z](?:[a-zA-Z'/-])+|\w+(?:['.,]?\w+)*"
-    return re.findall(r"\w+(?:\.?\w+)*",text)
+    return re.findall(r"\w+(?:\.\w+)*",text)
+    # return re.findall(r"(?:(?:\d+[.,])*\d+)|\w+(?:[\.-]\w+)*",text)
 
 def loadTFInfo(tf_line):
     '''input: 'term_id.df.ttf.|doc_id tf pos,pos\n',
     output: term_id, {'df': df, 'ttf': ttf, 'info': [[doc_id, tf, [pos]]]}
     '''
     doc_info = {}
-    slices = tf_line.rstrip('\n').split('.')
-    term_id, doc_info['df'], doc_info['ttf'] = map(lambda x: int(x), slices[:3])
-    docs = slices[-1].split('|')[1:]
+    slices = tf_line.rstrip('\n').split('|')
+    term_id, doc_info['df'], doc_info['ttf'] = map(lambda x: int(x),
+                                                    slices[0].split('.'))
+    docs = slices[1:]
     doc_info['info'] = map(lambda x: loadDocInfo(x), docs)
     return term_id, doc_info
 
@@ -51,7 +55,7 @@ def dumpTerm(term, term_info, f_inv):
     offset = f_inv.tell()
     sorted_info = sorted(term_info['info'], key = lambda x: -x[1]) # ordered by tf desc
     df_info_text = str(term) + '.' + str(term_info['df']) + '.' + \
-                        str(term_info['ttf']) + '.'
+                        str(term_info['ttf'])
     f_inv.write(df_info_text)
     for doc_info in sorted_info:
         text = '|' + ' '.join([str(doc_info[0]), str(doc_info[1]),
